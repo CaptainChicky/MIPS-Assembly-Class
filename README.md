@@ -3,6 +3,8 @@ This is the code archive for the initial labs and first project for the year 202
 
 Project requirements/instructions may have changed, so make sure to cross-check.
 
+Circuits are gay, so are not included.
+
 ## Two things of note: 
 1. I have removed all comments on the submission file for obvious reasons. You may use a large language model to re-add comments or explain the code to you. Since this code is extrordinarily simple, LLMs are generally extremely accurate. In fact, all labs and the first project may be finished with LLM aid, as they are very simple.
 
