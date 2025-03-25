@@ -1,5 +1,5 @@
 ## What is this?
-This is the code archive for the initial labs and first project for the year 2025. The code is run on a custom-built variant of the MARS MIPS assembler and editor, where the 2025 installer is included in this repo. The code is written on VSC with a MIPS asm formatter. Do not code on the given MARS assembler/editor, as it is extremely inconveneint. Simply just write the code in VSC, and alt-tab over to MARS to assemble and run.
+This is the code archive for the initial labs and first project for the year 2025. The code is run on a custom-built variant of the MARS MIPS assembler and editor, where the 2025 installer is included in this repo (Mars_2254_0111-4.5.54111.exe). The code is written on VSC with a MIPS asm formatter. Do not code on the given MARS assembler/editor, as it is extremely inconveneint. Simply just write the code in VSC, and alt-tab over to MARS to assemble and run.
 
 Project requirements/instructions may have changed, so make sure to cross-check.
 

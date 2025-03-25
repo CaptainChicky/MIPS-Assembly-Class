@@ -1,0 +1,238 @@
+
+# more complete display driver for use with lab 3.
+
+# use like:
+#   lstr a0, "whatever"
+# it will put "whatever" in the data segment, and use "la" to put
+# its address in a0.
+# you can use any register, not just a0.
+.macro lstr %rd, %str
+	.data
+	lstr_message: .asciiz %str
+	.text
+	la %rd, lstr_message
+.end_macro
+
+# use like
+#   print_str "whatever"
+# note the pushes and pops inside will preserve the values of a0
+# and v0, so you can use this anywhere.
+.macro print_str %str
+	push a0
+	push v0
+	lstr a0, %str
+	li v0, 4
+	syscall
+	pop v0
+	pop a0
+.end_macro
+
+# classic color palette indexes in the default palette
+.eqv COLOR_BLACK       0x40
+.eqv COLOR_RED         0x41
+.eqv COLOR_ORANGE      0x42
+.eqv COLOR_YELLOW      0x43
+.eqv COLOR_GREEN       0x44
+.eqv COLOR_BLUE        0x45
+.eqv COLOR_MAGENTA     0x46
+.eqv COLOR_WHITE       0x47
+.eqv COLOR_DARK_GREY   0x48
+.eqv COLOR_DARK_GRAY   0x48
+.eqv COLOR_BRICK       0x49
+.eqv COLOR_BROWN       0x4A
+.eqv COLOR_TAN         0x4B
+.eqv COLOR_DARK_GREEN  0x4C
+.eqv COLOR_DARK_BLUE   0x4D
+.eqv COLOR_PURPLE      0x4E
+.eqv COLOR_LIGHT_GREY  0x4F
+.eqv COLOR_LIGHT_GRAY  0x4F
+
+.eqv KEY_ESCAPE 27
+.eqv KEY_LEFT   37
+.eqv KEY_UP     38
+.eqv KEY_RIGHT  39
+.eqv KEY_DOWN   40
+.eqv KEY_Z      90
+.eqv KEY_X      88
+.eqv KEY_C      67
+.eqv KEY_V      86
+
+.eqv TILE_GRASS 0
+.eqv TILE_SAND  1
+.eqv TILE_BRICK 2
+.eqv TILE_WATER 3
+
+.eqv TILE_W 8
+.eqv TILE_H 8
+
+# -------------------------------------------------------------------------------------------------
+
+# neat, we can specify the address to put these vars at!
+# ...with a caveat
+.data 0xFFFF0000
+	display_ctrl:           .word 0 # 0xFFFF0000
+	display_sync:           .word 0 # 0xFFFF0004
+	display_reset:          .word 0 # 0xFFFF0008
+	display_frame_counter:  .word 0 # 0xFFFF000C
+
+	display_fb_clear:       .word 0 # 0xFFFF0010
+	display_fb_in_front:    .word 0 # 0xFFFF0014
+	display_fb_pal_offs:    .word 0 # 0xFFFF0018
+	display_fb_scx:         .word 0 # 0xFFFF001C
+	display_fb_scy:         .word 0 # 0xFFFF0020
+
+.data 0xFFFF0030
+	display_tm_scx:         .word 0       # 0xFFFF0030
+	display_tm_scy:         .word 0       # 0xFFFF0034
+
+.data 0xFFFF0040
+	display_key_held:       .word 0       # 0xFFFF0040
+	display_key_pressed:    .word 0       # 0xFFFF0044
+	display_key_released:   .word 0       # 0xFFFF0048
+
+.data 0xFFFF0C00
+	display_palette_ram:    .word 0:256   # 0xFFFF0C00-0xFFFF0FFF
+	display_palette_end:
+	display_fb_ram:         .byte 0:16384 # 0xFFFF1000-0xFFFF4FFF
+	display_fb_end:
+	display_tm_table:       .half 0:1024  # 0xFFFF5000-0xFFFF57FF
+	display_tm_end:
+	display_spr_table:      .byte 0:1024  # 0xFFFF5800-0xFFFF5BFF
+	display_spr_end:
+
+.data 0xFFFF6000
+	display_tm_gfx:         .byte 0:16384 # 0xFFFF6000-0xFFFF9FFF
+	display_spr_gfx:        .byte 0:16384 # 0xFFFFA000-0xFFFFDFFF
+
+# because there is no way to know the previous .data location,
+# this file must be included as the very first thing in any
+# program that uses it. buuuut whatever. this resets the data
+# location to its default value, so that the user variables
+# end up where they should.
+.data 0x10010000
+
+# -------------------------------------------------------------------------------------------------
+
+	# graphics data for the tilemap (kinds of ground tiles)
+	tilemap_gfx: .byte
+		# grass
+		0x44 0x44 0x44 0x44 0x44 0x44 0x44 0x44
+		0x44 0x4C 0x44 0x44 0x44 0x44 0x4C 0x44
+		0x44 0x44 0x44 0x4C 0x44 0x44 0x44 0x44
+		0x44 0x44 0x44 0x44 0x44 0x44 0x44 0x44
+		0x44 0x44 0x44 0x44 0x44 0x44 0x4C 0x44
+		0x44 0x4C 0x44 0x44 0x44 0x44 0x44 0x44
+		0x44 0x44 0x44 0x44 0x44 0x4C 0x44 0x44
+		0x44 0x44 0x44 0x4C 0x44 0x44 0x44 0x44
+
+		# sand
+		0x4B 0x4B 0x4B 0x4B 0x4B 0x4B 0x4B 0x4B
+		0x4B 0x4A 0x4B 0x4B 0x4B 0x4B 0x4A 0x4B
+		0x4B 0x4B 0x4B 0x4A 0x4B 0x4B 0x4B 0x4B
+		0x4B 0x4B 0x4B 0x4B 0x4B 0x4B 0x4B 0x4B
+		0x4B 0x4B 0x4B 0x4B 0x4B 0x4B 0x4A 0x4B
+		0x4B 0x4A 0x4B 0x4B 0x4B 0x4B 0x4B 0x4B
+		0x4B 0x4B 0x4B 0x4B 0x4B 0x4A 0x4B 0x4B
+		0x4B 0x4B 0x4B 0x4A 0x4B 0x4B 0x4B 0x4B
+
+		# bricks
+		0x49 0x49 0x4F 0x49 0x49 0x49 0x49 0x49
+		0x49 0x49 0x4F 0x49 0x49 0x49 0x49 0x49
+		0x49 0x49 0x4F 0x49 0x49 0x49 0x49 0x49
+		0x4F 0x4F 0x4F 0x4F 0x4F 0x4F 0x4F 0x4F
+		0x49 0x49 0x49 0x49 0x49 0x4F 0x49 0x49
+		0x49 0x49 0x49 0x49 0x49 0x4F 0x49 0x49
+		0x49 0x49 0x49 0x49 0x49 0x4F 0x49 0x49
+		0x4F 0x4F 0x4F 0x4F 0x4F 0x4F 0x4F 0x4F
+
+		# water
+		0x45 0x45 0x45 0x45 0x45 0x45 0x45 0x45
+		0x45 0x45 0x45 0x45 0x45 0x45 0x45 0x45
+		0x45 0x4D 0x45 0x45 0x4D 0x45 0x45 0x4D
+		0x45 0x45 0x4D 0x4D 0x45 0x4D 0x4D 0x45
+		0x45 0x45 0x45 0x45 0x45 0x45 0x45 0x45
+		0x45 0x45 0x45 0x45 0x45 0x45 0x45 0x45
+		0x45 0x45 0x45 0x45 0x45 0x45 0x45 0x45
+		0x45 0x45 0x45 0x45 0x45 0x45 0x45 0x45
+
+	# graphics data for the sprites (well, the one sprite)
+	sprite_gfx: .byte
+		# tile "frame"
+		0x01 0x01 0x01 0x00 0x00 0x01 0x01 0x01
+		0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x01
+		0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x01
+		0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+		0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+		0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x01
+		0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x01
+		0x01 0x01 0x01 0x00 0x00 0x01 0x01 0x01
+.text
+
+# -------------------------------------------------------------------------------------------------
+
+# initialize the display so it's set up right for lab 3.
+display_init:
+	li t0, 0x000f0103 # 15 ms/frame, framebuffer on, tilemap on, enhanced mode on
+	sw t0, display_ctrl # ~ magical store ~
+
+	# reset everything
+	sw zero, display_reset
+
+	# force a display update to clear the display to black
+	sw zero, display_sync
+jr ra
+
+# -------------------------------------------------------------------------------------------------
+
+# should be called at the end of each frame. displays everything
+# and then waits the right amount of time for the next frame.
+display_finish_frame:
+	sw zero, display_sync # display
+	lw zero, display_sync # wait (~ magical load ~)
+jr ra
+
+# -------------------------------------------------------------------------------------------------
+
+# void display_load_tm_gfx(int* src, int firstDestTile, int numTiles)
+#   loads numTiles tiles of graphics into the tilemap graphics area.
+#   a0 is the address of the array from which the graphics will be copied.
+#   a1 is the first tile in the graphics area that will be overwritten.
+#   a2 is the number of tiles to copy. Shouldn't be < 0.
+display_load_tm_gfx:
+	mul a1, a1, 64
+	la  t0, display_tm_gfx
+	add a1, a1, t0
+	mul a2, a2, 64
+j PRIVATE_tilecpy
+
+# -------------------------------------------------------------------------------------------------
+
+# void display_load_sprite_gfx(int* src, int firstDestTile, int numTiles)
+#   loads numTiles tiles of graphics into the sprite graphics area.
+#   a0 is the address of the array from which the graphics will be copied.
+#   a1 is the first tile in the graphics area that will be overwritten.
+#   a2 is the number of tiles to copy. Shouldn't be < 0.
+display_load_sprite_gfx:
+	mul a1, a1, 64
+	la  t0, display_spr_gfx
+	add a1, a1, t0
+	mul a2, a2, 64
+j PRIVATE_tilecpy
+
+# -------------------------------------------------------------------------------------------------
+
+# PRIVATE FUNCTION, DO NOT CALL!!!!!!!
+#  like memcpy, but (src, dest, bytes) instead of (dest, src, bytes).
+#  also assumes number of bytes is a nonzero multiple of 4
+#  a0 = source
+#  a1 = target
+#  a2 = number of bytes
+PRIVATE_tilecpy:
+	_loop:
+		lw t0, (a0)
+		sw t0, (a1)
+		add a0, a0, 4
+		add a1, a1, 4
+		sub a2, a2, 4
+	bgt a2, 0, _loop
+jr ra
